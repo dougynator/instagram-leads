@@ -1,12 +1,62 @@
 'use client';
 
 import { FilterCriteria, DEFAULT_FILTERS } from '@/lib/types';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 interface FilterEditorProps {
   filters: FilterCriteria;
   onChange: (filters: FilterCriteria) => void;
   compact?: boolean;
+}
+
+// Keyword input that keeps a local text state and only parses on blur
+function KeywordInput({
+  label,
+  placeholder,
+  value,
+  onChange,
+}: {
+  label: string;
+  placeholder: string;
+  value: string[];
+  onChange: (keywords: string[]) => void;
+}) {
+  const [text, setText] = useState(value.join(', '));
+
+  // Sync from parent only when the array reference changes (e.g. reset)
+  useEffect(() => {
+    setText(value.join(', '));
+  }, [value]);
+
+  const commitKeywords = () => {
+    const keywords = text
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    onChange(keywords);
+  };
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-muted mb-1">
+        {label} <span className="text-muted/60">(optional)</span>
+      </label>
+      <input
+        type="text"
+        placeholder={placeholder}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commitKeywords}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commitKeywords();
+          }
+        }}
+        className="w-full px-3 py-2 bg-white border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+      />
+    </div>
+  );
 }
 
 export default function FilterEditor({ filters, onChange, compact = false }: FilterEditorProps) {
@@ -30,17 +80,12 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
     });
   };
 
-  const parseKeywords = (value: string): string[] => {
-    return value
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-  };
-
   const resetDefaults = () => {
     onChange({ ...DEFAULT_FILTERS });
     setShowScoring(!!DEFAULT_FILTERS.scoring_enabled);
   };
+
+  const opt = <span className="text-muted/60">(optional)</span>;
 
   return (
     <div className="space-y-6">
@@ -57,10 +102,12 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
         </button>
       </div>
 
+      <p className="text-xs text-muted -mt-3">All filters are optional. Leave empty to skip.</p>
+
       {/* Follower Range */}
       <div className={`grid ${compact ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
         <div>
-          <label className="block text-xs font-medium text-muted mb-1">Min Followers</label>
+          <label className="block text-xs font-medium text-muted mb-1">Min Followers {opt}</label>
           <input
             type="number"
             placeholder="e.g. 1000"
@@ -70,7 +117,7 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-muted mb-1">Max Followers</label>
+          <label className="block text-xs font-medium text-muted mb-1">Max Followers {opt}</label>
           <input
             type="number"
             placeholder="e.g. 100000"
@@ -84,7 +131,7 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
       {/* Engagement Range */}
       <div className={`grid ${compact ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
         <div>
-          <label className="block text-xs font-medium text-muted mb-1">Min Engagement Rate (%)</label>
+          <label className="block text-xs font-medium text-muted mb-1">Min Engagement Rate (%) {opt}</label>
           <input
             type="number"
             step="0.1"
@@ -95,7 +142,7 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-muted mb-1">Max Engagement Rate (%)</label>
+          <label className="block text-xs font-medium text-muted mb-1">Max Engagement Rate (%) {opt}</label>
           <input
             type="number"
             step="0.1"
@@ -110,7 +157,7 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
       {/* Avg Likes / Comments */}
       <div className={`grid ${compact ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
         <div>
-          <label className="block text-xs font-medium text-muted mb-1">Min Avg Likes (last X posts)</label>
+          <label className="block text-xs font-medium text-muted mb-1">Min Avg Likes {opt}</label>
           <input
             type="number"
             placeholder="e.g. 100"
@@ -120,7 +167,7 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-muted mb-1">Min Avg Comments (last X posts)</label>
+          <label className="block text-xs font-medium text-muted mb-1">Min Avg Comments {opt}</label>
           <input
             type="number"
             placeholder="e.g. 10"
@@ -135,20 +182,21 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
       <div className={`grid ${compact ? 'grid-cols-1' : 'grid-cols-2'} gap-4`}>
         <div>
           <label className="block text-xs font-medium text-muted mb-1">
-            Posts to Analyze (X)
+            Posts to Analyze {opt}
           </label>
           <input
             type="number"
             min={1}
             max={50}
-            value={filters.last_x_posts_to_analyze ?? 12}
-            onChange={(e) => update('last_x_posts_to_analyze', Number(e.target.value) || 12)}
+            placeholder="12"
+            value={filters.last_x_posts_to_analyze ?? ''}
+            onChange={(e) => update('last_x_posts_to_analyze', e.target.value ? Number(e.target.value) : null)}
             className="w-full px-3 py-2 bg-white border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
           />
         </div>
         <div>
           <label className="block text-xs font-medium text-muted mb-1">
-            Last Post Within (days)
+            Last Post Within (days) {opt}
           </label>
           <input
             type="number"
@@ -160,44 +208,26 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
         </div>
       </div>
 
-      {/* Bio Keywords */}
+      {/* Bio Keywords - using local-state inputs that parse on blur */}
       <div className="space-y-3">
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">
-            Bio Keywords Include (comma-separated)
-          </label>
-          <input
-            type="text"
-            placeholder="e.g. photographer, creator, artist"
-            value={(filters.bio_keywords_include || []).join(', ')}
-            onChange={(e) => update('bio_keywords_include', parseKeywords(e.target.value))}
-            className="w-full px-3 py-2 bg-white border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">
-            Bio Keywords Exclude (comma-separated)
-          </label>
-          <input
-            type="text"
-            placeholder="e.g. spam, bot, fake"
-            value={(filters.bio_keywords_exclude || []).join(', ')}
-            onChange={(e) => update('bio_keywords_exclude', parseKeywords(e.target.value))}
-            className="w-full px-3 py-2 bg-white border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-muted mb-1">
-            Location Keywords (comma-separated)
-          </label>
-          <input
-            type="text"
-            placeholder="e.g. NYC, New York, LA"
-            value={(filters.location_keywords || []).join(', ')}
-            onChange={(e) => update('location_keywords', parseKeywords(e.target.value))}
-            className="w-full px-3 py-2 bg-white border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-          />
-        </div>
+        <KeywordInput
+          label="Bio Keywords Include"
+          placeholder="e.g. photographer, creator, artist"
+          value={filters.bio_keywords_include || []}
+          onChange={(kw) => update('bio_keywords_include', kw)}
+        />
+        <KeywordInput
+          label="Bio Keywords Exclude"
+          placeholder="e.g. spam, bot, fake"
+          value={filters.bio_keywords_exclude || []}
+          onChange={(kw) => update('bio_keywords_exclude', kw)}
+        />
+        <KeywordInput
+          label="Location Keywords"
+          placeholder="e.g. NYC, New York, LA"
+          value={filters.location_keywords || []}
+          onChange={(kw) => update('location_keywords', kw)}
+        />
       </div>
 
       {/* Contact Info */}
@@ -209,7 +239,7 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
             onChange={(e) => update('contact_info_required', e.target.checked)}
             className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20"
           />
-          <span className="text-sm font-medium">Require Contact Info</span>
+          <span className="text-sm font-medium">Require Contact Info {opt}</span>
         </label>
 
         {filters.contact_info_required && (
@@ -257,7 +287,7 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
             }}
             className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20"
           />
-          <span className="text-sm font-medium">Enable Scoring (0-100)</span>
+          <span className="text-sm font-medium">Enable Scoring (0-100) {opt}</span>
         </label>
 
         {showScoring && (

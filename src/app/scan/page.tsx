@@ -3,12 +3,18 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Client, FilterCriteria, DEFAULT_FILTERS } from '@/lib/types';
-import CsvUpload from '@/components/scan/CsvUpload';
 import FilterEditor from '@/components/scan/FilterEditor';
 import ScanProgress from '@/components/scan/ScanProgress';
 import { useToast } from '@/components/ui/Toast';
 
 type Step = 'setup' | 'running';
+
+function parseUsernames(text: string): string[] {
+  return text
+    .split(/[\n,]+/)
+    .map((u) => u.trim().replace(/^@/, '').toLowerCase())
+    .filter((u) => u.length > 0);
+}
 
 export default function ScanPage() {
   const router = useRouter();
@@ -18,11 +24,12 @@ export default function ScanPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [scanName, setScanName] = useState('');
-  const [usernames, setUsernames] = useState<string[]>([]);
-  const [totalInFile, setTotalInFile] = useState(0);
+  const [usernameText, setUsernameText] = useState('');
   const [filters, setFilters] = useState<FilterCriteria>({ ...DEFAULT_FILTERS });
   const [scanId, setScanId] = useState<string>('');
   const [isCreating, setIsCreating] = useState(false);
+
+  const usernames = parseUsernames(usernameText);
 
   useEffect(() => {
     fetch('/api/clients')
@@ -33,7 +40,6 @@ export default function ScanPage() {
       .catch(() => {});
   }, []);
 
-  // When client changes, load their default filters
   const handleClientChange = (clientId: string) => {
     setSelectedClientId(clientId);
     if (clientId) {
@@ -49,7 +55,7 @@ export default function ScanPage() {
 
   const handleStartScan = async () => {
     if (usernames.length === 0) {
-      toast('error', 'Please upload a CSV with usernames first');
+      toast('error', 'Enter at least one Instagram username');
       return;
     }
 
@@ -103,7 +109,7 @@ export default function ScanPage() {
       {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-foreground">New Scan</h1>
-        <p className="text-sm text-muted mt-1">Upload a CSV of Instagram usernames and configure filters</p>
+        <p className="text-sm text-muted mt-1">Enter Instagram usernames, set optional filters, and run a scan</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -113,7 +119,7 @@ export default function ScanPage() {
           <div className="bg-card border border-border rounded-xl p-6 space-y-4">
             <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide">Scan Details</h2>
             <div>
-              <label className="block text-xs font-medium text-muted mb-1">Scan Name (optional)</label>
+              <label className="block text-xs font-medium text-muted mb-1">Scan Name <span className="text-muted/60">(optional)</span></label>
               <input
                 type="text"
                 value={scanName}
@@ -123,7 +129,7 @@ export default function ScanPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted mb-1">Client</label>
+              <label className="block text-xs font-medium text-muted mb-1">Client <span className="text-muted/60">(optional)</span></label>
               <select
                 value={selectedClientId}
                 onChange={(e) => handleClientChange(e.target.value)}
@@ -139,21 +145,26 @@ export default function ScanPage() {
             </div>
           </div>
 
-          {/* CSV Upload */}
+          {/* Username Input */}
           <div className="bg-card border border-border rounded-xl p-6">
-            <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-4">Upload CSV</h2>
-            <CsvUpload
-              onUsernamesReady={(u, total) => {
-                setUsernames(u);
-                setTotalInFile(total);
-              }}
+            <h2 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-4">Instagram Usernames</h2>
+            <textarea
+              value={usernameText}
+              onChange={(e) => setUsernameText(e.target.value)}
+              placeholder={"Enter usernames, one per line or comma-separated:\n\nnike\nadidas\ngymshark\nlululemon"}
+              rows={8}
+              className="w-full px-3 py-2 bg-white border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono resize-y"
             />
-            {usernames.length > 0 && (
-              <div className="mt-3 px-3 py-2 bg-success/10 text-success rounded-lg text-sm">
-                Ready: {usernames.length} usernames selected
-                {totalInFile > usernames.length && ` (${totalInFile} total in file)`}
-              </div>
-            )}
+            <div className="mt-2 flex items-center justify-between">
+              <p className="text-xs text-muted">
+                One username per line, or comma-separated. The @ is optional.
+              </p>
+              {usernames.length > 0 && (
+                <span className="text-xs font-medium text-success bg-success/10 px-2 py-1 rounded-full">
+                  {usernames.length} username{usernames.length !== 1 ? 's' : ''}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -179,7 +190,7 @@ export default function ScanPage() {
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
-                Start Scan ({usernames.length} usernames)
+                Start Scan{usernames.length > 0 ? ` (${usernames.length} usernames)` : ''}
               </>
             )}
           </button>
