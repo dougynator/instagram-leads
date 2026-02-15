@@ -48,6 +48,11 @@ export type ScanItemStatus = 'pending' | 'processing' | 'completed' | 'error' | 
 // ==================== Filter Criteria ====================
 
 export interface FilterCriteria {
+  // Discovery: how to find accounts
+  search_hashtags?: string[];
+  search_keywords?: string[];
+  max_accounts?: number;
+  // Filters: which accounts to keep
   min_followers?: number | null;
   max_followers?: number | null;
   min_engagement_rate?: number | null;
@@ -78,6 +83,9 @@ export interface ScoringWeights {
 }
 
 export const DEFAULT_FILTERS: FilterCriteria = {
+  search_hashtags: [],
+  search_keywords: [],
+  max_accounts: 25,
   min_followers: null,
   max_followers: null,
   min_engagement_rate: null,

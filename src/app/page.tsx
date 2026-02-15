@@ -112,8 +112,8 @@ export default function DashboardPage() {
             </svg>
           </div>
           <div>
-            <h3 className="font-semibold text-foreground">Start New Scan</h3>
-            <p className="text-sm text-muted">Upload CSV and scan Instagram leads</p>
+            <h3 className="font-semibold text-foreground">Find New Leads</h3>
+            <p className="text-sm text-muted">Search Instagram and discover leads</p>
           </div>
         </Link>
         <Link

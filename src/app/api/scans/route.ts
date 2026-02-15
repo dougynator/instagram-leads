@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getScans, createScan, createScanItems } from '@/lib/db';
+import { getScans, createScan } from '@/lib/db';
 
 export async function GET() {
   try {
@@ -14,23 +14,13 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { usernames, ...scanData } = body;
 
-    // Create the scan
     const scan = await createScan({
-      ...scanData,
-      total_input: usernames?.length || 0,
+      client_id: body.client_id || null,
+      name: body.name || 'Untitled Scan',
+      filters: body.filters || {},
+      total_input: 0,
     });
-
-    // Create scan items for each username
-    if (usernames?.length > 0) {
-      const items = usernames.map((username: string) => ({
-        scan_id: scan.id,
-        username: username.replace(/^@/, '').trim().toLowerCase(),
-        profile_url: `https://instagram.com/${username.replace(/^@/, '').trim().toLowerCase()}`,
-      }));
-      await createScanItems(items);
-    }
 
     return NextResponse.json(scan, { status: 201 });
   } catch (error: unknown) {

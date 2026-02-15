@@ -70,6 +70,7 @@ export default function ScanProgress({ scanId, onComplete }: ScanProgressProps) 
   const scanned = scan.total_scanned || 0;
   const matched = scan.total_matched || 0;
   const errors = scan.total_errors || 0;
+  const isDiscovering = scan.status === 'running' && total === 0;
   const progress = total > 0 ? Math.round((scanned / total) * 100) : 0;
   const isComplete = ['completed', 'cancelled', 'failed'].includes(scan.status);
 
@@ -83,13 +84,16 @@ export default function ScanProgress({ scanId, onComplete }: ScanProgressProps) 
     <div className="space-y-6">
       {/* Progress header */}
       <div className="text-center">
-        {!isComplete ? (
-          <>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-full mb-4">
-              <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-              <span className="text-sm font-medium">Scanning in progress...</span>
-            </div>
-          </>
+        {!isComplete && isDiscovering ? (
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-accent/10 text-accent rounded-full mb-4">
+            <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
+            <span className="text-sm font-medium">Searching Instagram for leads...</span>
+          </div>
+        ) : !isComplete ? (
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary rounded-full mb-4">
+            <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+            <span className="text-sm font-medium">Analyzing {total} discovered accounts...</span>
+          </div>
         ) : scan.status === 'completed' ? (
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-success/10 text-success rounded-full mb-4">
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -103,10 +107,19 @@ export default function ScanProgress({ scanId, onComplete }: ScanProgressProps) 
           </div>
         )}
 
-        <h2 className="text-2xl font-bold">{progress}%</h2>
-        <p className="text-sm text-muted mt-1">
-          {scanned} of {total} profiles scanned
-        </p>
+        {isDiscovering ? (
+          <>
+            <div className="w-12 h-12 mx-auto border-3 border-accent/30 border-t-accent rounded-full animate-spin mb-2" />
+            <p className="text-sm text-muted">Discovering accounts...</p>
+          </>
+        ) : (
+          <>
+            <h2 className="text-2xl font-bold">{progress}%</h2>
+            <p className="text-sm text-muted mt-1">
+              {scanned} of {total} profiles analyzed
+            </p>
+          </>
+        )}
       </div>
 
       {/* Progress bar */}
