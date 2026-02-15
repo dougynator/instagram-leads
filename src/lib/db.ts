@@ -1,17 +1,18 @@
 // ==================== Data Access Layer ====================
 // Switches between Supabase and in-memory store based on config
 
-import { supabaseAdmin, isSupabaseConfigured } from './supabase';
+import { getSupabaseAdmin, isSupabaseConfigured } from './supabase';
 import store from './store';
 import { Client, Scan, ScanItem, DashboardStats } from './types';
 
 const useSupabase = () => isSupabaseConfigured();
+const db = () => getSupabaseAdmin();
 
 // ==================== Clients ====================
 
 export async function getClients(): Promise<Client[]> {
   if (!useSupabase()) return store.getClients();
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('clients')
     .select('*')
     .order('created_at', { ascending: false });
@@ -21,7 +22,7 @@ export async function getClients(): Promise<Client[]> {
 
 export async function getClient(id: string): Promise<Client | null> {
   if (!useSupabase()) return store.getClient(id);
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('clients')
     .select('*')
     .eq('id', id)
@@ -32,7 +33,7 @@ export async function getClient(id: string): Promise<Client | null> {
 
 export async function createClient(input: Partial<Client>): Promise<Client> {
   if (!useSupabase()) return store.createClient(input);
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('clients')
     .insert({
       name: input.name,
@@ -47,7 +48,7 @@ export async function createClient(input: Partial<Client>): Promise<Client> {
 
 export async function updateClient(id: string, input: Partial<Client>): Promise<Client | null> {
   if (!useSupabase()) return store.updateClient(id, input);
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('clients')
     .update({
       name: input.name,
@@ -63,7 +64,7 @@ export async function updateClient(id: string, input: Partial<Client>): Promise<
 
 export async function deleteClient(id: string): Promise<boolean> {
   if (!useSupabase()) return store.deleteClient(id);
-  const { error } = await supabaseAdmin.from('clients').delete().eq('id', id);
+  const { error } = await db().from('clients').delete().eq('id', id);
   return !error;
 }
 
@@ -71,7 +72,7 @@ export async function deleteClient(id: string): Promise<boolean> {
 
 export async function getScans(): Promise<Scan[]> {
   if (!useSupabase()) return store.getScans();
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('scans')
     .select('*, client:clients(*)')
     .order('created_at', { ascending: false });
@@ -81,7 +82,7 @@ export async function getScans(): Promise<Scan[]> {
 
 export async function getScan(id: string): Promise<Scan | null> {
   if (!useSupabase()) return store.getScan(id);
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('scans')
     .select('*, client:clients(*)')
     .eq('id', id)
@@ -92,7 +93,7 @@ export async function getScan(id: string): Promise<Scan | null> {
 
 export async function createScan(input: Partial<Scan>): Promise<Scan> {
   if (!useSupabase()) return store.createScan(input);
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('scans')
     .insert({
       client_id: input.client_id || null,
@@ -118,7 +119,7 @@ export async function updateScan(id: string, input: Partial<Scan>): Promise<Scan
   if (input.name !== undefined) updateData.name = input.name;
   if (input.filters !== undefined) updateData.filters = input.filters;
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('scans')
     .update(updateData)
     .eq('id', id)
@@ -132,7 +133,7 @@ export async function updateScan(id: string, input: Partial<Scan>): Promise<Scan
 
 export async function getScanItems(scanId: string): Promise<ScanItem[]> {
   if (!useSupabase()) return store.getScanItems(scanId);
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('scan_items')
     .select('*')
     .eq('scan_id', scanId)
@@ -152,7 +153,7 @@ export async function createScanItems(items: Partial<ScanItem>[]): Promise<ScanI
       profile_url: item.profile_url || `https://instagram.com/${item.username}`,
       status: 'pending' as const,
     }));
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await db()
       .from('scan_items')
       .insert(chunk)
       .select();
@@ -177,7 +178,7 @@ export async function updateScanItem(
   if (input.status !== undefined) updateData.status = input.status;
   if (input.error_message !== undefined) updateData.error_message = input.error_message;
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await db()
     .from('scan_items')
     .update(updateData)
     .eq('id', id)
@@ -193,10 +194,10 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   if (!useSupabase()) return store.getDashboardStats();
 
   const [clientsRes, scansRes, matchedRes, lastScanRes] = await Promise.all([
-    supabaseAdmin.from('clients').select('id', { count: 'exact', head: true }),
-    supabaseAdmin.from('scans').select('id', { count: 'exact', head: true }),
-    supabaseAdmin.from('scan_items').select('id', { count: 'exact', head: true }).eq('matched', true),
-    supabaseAdmin
+    db().from('clients').select('id', { count: 'exact', head: true }),
+    db().from('scans').select('id', { count: 'exact', head: true }),
+    db().from('scan_items').select('id', { count: 'exact', head: true }).eq('matched', true),
+    db()
       .from('scans')
       .select('finished_at, started_at')
       .eq('status', 'completed')
