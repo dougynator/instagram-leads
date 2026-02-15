@@ -151,7 +151,7 @@ export default function ScanPage() {
             <textarea
               value={usernameText}
               onChange={(e) => setUsernameText(e.target.value)}
-              placeholder={"Enter usernames, one per line or comma-separated:\n\nnike\nadidas\ngymshark\nlululemon"}
+              placeholder={'nike\nadidas\ngymshark\nlululemon'}
               rows={8}
               className="w-full px-3 py-2 bg-white border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary font-mono resize-y"
             />
