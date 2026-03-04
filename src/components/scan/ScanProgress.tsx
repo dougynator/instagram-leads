@@ -11,12 +11,13 @@ interface ScanProgressProps {
 export default function ScanProgress({ scanId, onComplete }: ScanProgressProps) {
   const [scan, setScan] = useState<Scan | null>(null);
   const [items, setItems] = useState<ScanItem[]>([]);
-  const [isRunning, setIsRunning] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [executionError, setExecutionError] = useState<string | null>(null);
 
   const fetchProgress = useCallback(async () => {
     try {
-      const res = await fetch(`/api/scans/${scanId}`);
+      const res = await fetch(`/api/scans/${scanId}`, { cache: 'no-store' });
+      if (!res.ok) return;
       const data = await res.json();
       setScan(data.scan);
       setItems(data.items || []);
@@ -32,11 +33,15 @@ export default function ScanProgress({ scanId, onComplete }: ScanProgressProps) 
   // Start execution
   useEffect(() => {
     const startScan = async () => {
-      setIsRunning(true);
       try {
-        await fetch(`/api/scans/${scanId}/execute`, { method: 'POST' });
+        const res = await fetch(`/api/scans/${scanId}/execute`, { method: 'POST' });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setExecutionError(data?.error || 'Failed to start scan');
+        }
       } catch (err) {
         console.error('Scan execution error:', err);
+        setExecutionError('Scan execution request failed');
       }
     };
     startScan();
@@ -44,9 +49,12 @@ export default function ScanProgress({ scanId, onComplete }: ScanProgressProps) 
 
   // Poll for updates
   useEffect(() => {
-    fetchProgress();
+    const immediate = setTimeout(fetchProgress, 0);
     const interval = setInterval(fetchProgress, 2000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(immediate);
+      clearInterval(interval);
+    };
   }, [fetchProgress]);
 
   const handleCancel = async () => {
@@ -70,9 +78,9 @@ export default function ScanProgress({ scanId, onComplete }: ScanProgressProps) 
   const scanned = scan.total_scanned || 0;
   const matched = scan.total_matched || 0;
   const errors = scan.total_errors || 0;
-  const isDiscovering = scan.status === 'running' && total === 0;
-  const progress = total > 0 ? Math.round((scanned / total) * 100) : 0;
   const isComplete = ['completed', 'cancelled', 'failed'].includes(scan.status);
+  const isDiscovering = !isComplete && (scan.status === 'pending' || (scan.status === 'running' && total === 0));
+  const progress = total > 0 ? Math.round((scanned / total) * 100) : 0;
 
   // Show the most recently processed items
   const processedItems = items
@@ -84,6 +92,9 @@ export default function ScanProgress({ scanId, onComplete }: ScanProgressProps) 
     <div className="space-y-6">
       {/* Progress header */}
       <div className="text-center">
+        {executionError && (
+          <p className="text-xs text-danger mb-3">{executionError}</p>
+        )}
         {!isComplete && isDiscovering ? (
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-accent/10 text-accent rounded-full mb-4">
             <div className="w-2 h-2 bg-accent rounded-full animate-pulse" />
