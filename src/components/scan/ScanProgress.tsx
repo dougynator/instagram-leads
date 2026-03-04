@@ -21,10 +21,6 @@ export default function ScanProgress({ scanId, onComplete }: ScanProgressProps) 
       const data = await res.json();
       setScan(data.scan);
       setItems(data.items || []);
-
-      if (['completed', 'cancelled', 'failed'].includes(data.scan?.status)) {
-        setIsRunning(false);
-      }
     } catch (err) {
       console.error('Failed to fetch progress:', err);
     }
