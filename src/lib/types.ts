@@ -64,6 +64,8 @@ export interface FilterCriteria {
   bio_keywords_include?: string[];
   bio_keywords_exclude?: string[];
   location_keywords?: string[];
+  location_country?: string | null;
+  location_belgium_provinces?: string[];
   contact_info_required?: boolean;
   contact_info_types?: {
     email?: boolean;
@@ -97,6 +99,8 @@ export const DEFAULT_FILTERS: FilterCriteria = {
   bio_keywords_include: [],
   bio_keywords_exclude: [],
   location_keywords: [],
+  location_country: null,
+  location_belgium_provinces: [],
   contact_info_required: false,
   contact_info_types: { email: true, website: true, phone: true },
   scoring_enabled: true,

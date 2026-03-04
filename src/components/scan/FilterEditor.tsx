@@ -1,6 +1,7 @@
 'use client';
 
 import { FilterCriteria, DEFAULT_FILTERS } from '@/lib/types';
+import { COUNTRY_OPTIONS, BELGIUM_PROVINCE_OPTIONS } from '@/lib/location';
 import { useState, useEffect } from 'react';
 
 interface FilterEditorProps {
@@ -78,6 +79,12 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
       ...filters,
       contact_info_types: { ...filters.contact_info_types, [key]: value },
     });
+  };
+
+  const toggleBelgiumProvince = (province: string, checked: boolean) => {
+    const current = filters.location_belgium_provinces || [];
+    const next = checked ? [...new Set([...current, province])] : current.filter((p) => p !== province);
+    update('location_belgium_provinces', next);
   };
 
   const resetDefaults = () => {
@@ -228,6 +235,54 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
           value={filters.location_keywords || []}
           onChange={(kw) => update('location_keywords', kw)}
         />
+        <div>
+          <label className="block text-xs font-medium text-muted mb-1">
+            Lead Country <span className="text-muted/60">(optional)</span>
+          </label>
+          <select
+            value={filters.location_country || ''}
+            onChange={(e) => {
+              const country = e.target.value || null;
+              onChange({
+                ...filters,
+                location_country: country,
+                location_belgium_provinces:
+                  country === 'belgium' ? filters.location_belgium_provinces || [] : [],
+              });
+            }}
+            className="w-full px-3 py-2 bg-white border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          >
+            <option value="">Any country</option>
+            {COUNTRY_OPTIONS.map((country) => (
+              <option key={country.value} value={country.value}>
+                {country.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        {filters.location_country === 'belgium' && (
+          <div>
+            <label className="block text-xs font-medium text-muted mb-2">
+              Belgium Provinces <span className="text-muted/60">(optional)</span>
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {BELGIUM_PROVINCE_OPTIONS.map((province) => (
+                <label key={province} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={(filters.location_belgium_provinces || []).includes(province)}
+                    onChange={(e) => toggleBelgiumProvince(province, e.target.checked)}
+                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20"
+                  />
+                  <span className="text-sm">{province}</span>
+                </label>
+              ))}
+            </div>
+            <p className="text-xs text-muted mt-1">
+              If no province is selected, all Belgium provinces are allowed.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Contact Info */}

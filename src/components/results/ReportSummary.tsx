@@ -23,6 +23,13 @@ export default function ReportSummary({ scan, items, onClose }: ReportSummaryPro
   if (filters.contact_info_required) filterSummary.push('Contact info required');
   if (filters.bio_keywords_include?.length) filterSummary.push(`Include keywords: ${filters.bio_keywords_include.join(', ')}`);
   if (filters.bio_keywords_exclude?.length) filterSummary.push(`Exclude keywords: ${filters.bio_keywords_exclude.join(', ')}`);
+  if (filters.location_country) {
+    const country = filters.location_country.charAt(0).toUpperCase() + filters.location_country.slice(1);
+    filterSummary.push(`Country: ${country}`);
+  }
+  if (filters.location_country === 'belgium' && filters.location_belgium_provinces?.length) {
+    filterSummary.push(`Belgium provinces: ${filters.location_belgium_provinces.join(', ')}`);
+  }
   if (filters.last_post_within_days) filterSummary.push(`Last post within ${filters.last_post_within_days} days`);
 
   return (

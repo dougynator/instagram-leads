@@ -1,4 +1,5 @@
 import { FilterCriteria, ScrapedProfile, MatchReason, ScoringWeights } from './types';
+import { getLocationKeywordsFromFilters } from './location';
 
 // ==================== Filter Evaluation ====================
 
@@ -7,6 +8,19 @@ export function evaluateFilters(
   filters: FilterCriteria
 ): { matched: boolean; reasons: MatchReason[] } {
   const reasons: MatchReason[] = [];
+  const autoLocationKeywords = getLocationKeywordsFromFilters(filters);
+  const locationKeywords = [
+    ...new Set([...(filters.location_keywords || []), ...autoLocationKeywords].map((kw) => kw.toLowerCase())),
+  ];
+
+  const locationText = [
+    profile.bio || '',
+    profile.display_name || '',
+    profile.external_link || '',
+    ...(profile.recent_posts || []).map((post) => post.caption || ''),
+  ]
+    .join(' ')
+    .toLowerCase();
 
   // Helper
   const addReason = (criterion: string, passed: boolean, detail: string) => {
@@ -141,18 +155,16 @@ export function evaluateFilters(
   }
 
   // Location keywords
-  if (filters.location_keywords?.length) {
-    const text = `${profile.bio || ''} ${profile.display_name || ''}`.toLowerCase();
-    const matched = filters.location_keywords.filter((kw) =>
-      text.includes(kw.toLowerCase())
-    );
+  if (locationKeywords.length) {
+    const matched = locationKeywords.filter((kw) => locationText.includes(kw));
     const passed = matched.length > 0;
+    const criteriaLabel = filters.location_country ? 'location_country' : 'location_keywords';
     addReason(
-      'location_keywords',
+      criteriaLabel,
       passed,
       passed
         ? `Location match: ${matched.join(', ')}`
-        : `No location match for: ${filters.location_keywords.join(', ')}`
+        : `No location match for: ${locationKeywords.join(', ')}`
     );
   }
 
@@ -198,6 +210,8 @@ export function computeScore(
   filters: FilterCriteria
 ): number {
   if (!filters.scoring_enabled) return 0;
+  const autoLocationKeywords = getLocationKeywordsFromFilters(filters);
+  const locationKeywords = [...(filters.location_keywords || []), ...autoLocationKeywords];
 
   const weights: ScoringWeights = filters.scoring_weights || {
     followers: 20,
@@ -274,14 +288,21 @@ export function computeScore(
 
   // Keyword match score
   if (weights.keyword_match) {
-    const bio = (profile.bio || '').toLowerCase();
+    const text = [
+      profile.bio || '',
+      profile.display_name || '',
+      profile.external_link || '',
+      ...(profile.recent_posts || []).map((post) => post.caption || ''),
+    ]
+      .join(' ')
+      .toLowerCase();
     const includeKw = filters.bio_keywords_include || [];
-    const locationKw = filters.location_keywords || [];
-    const allKw = [...includeKw, ...locationKw];
+    const locationKw = locationKeywords;
+    const allKw = [...new Set([...includeKw, ...locationKw].map((kw) => kw.toLowerCase()))];
 
     let kScore = 0;
     if (allKw.length > 0) {
-      const matched = allKw.filter((kw) => bio.includes(kw.toLowerCase()));
+      const matched = allKw.filter((kw) => text.includes(kw));
       kScore = Math.round((matched.length / allKw.length) * 100);
     } else {
       kScore = 50; // Neutral when no keywords defined

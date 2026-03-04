@@ -17,6 +17,7 @@ Edit `.env.local` with your values:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anon key
 - `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key (server-side only)
 - `INSTAGRAM_SESSION_COOKIE` - (Optional) Instagram session cookie for authenticated scraping
+- `ALLOW_MOCK_DATA` - Optional fallback toggle (`false` by default; set `true` for demo data)
 
 > **Note:** The app works without Supabase configured! It falls back to an in-memory store for local development/testing. Data won't persist across restarts in this mode.
 
@@ -41,7 +42,10 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ## Instagram Scraping
 
-The scraper attempts to use Instagram's web API. If Instagram blocks the request (rate limiting, requires login, etc.), it automatically falls back to realistic mock data so the UI remains fully functional.
+The scraper attempts to use Instagram's web API.
+
+- With `ALLOW_MOCK_DATA=false` (recommended for production): the scan will fail/mark item errors when live Instagram data is unavailable, so fake leads are never mixed into real results.
+- With `ALLOW_MOCK_DATA=true` (demo/testing): it can fall back to realistic mock data so the UI remains fully functional even if Instagram blocks requests.
 
 To improve scraping success:
 1. Set `INSTAGRAM_SESSION_COOKIE` in your `.env.local`

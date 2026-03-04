@@ -25,18 +25,33 @@ export async function POST(
 
     const filters: FilterCriteria = scan.filters || {};
     const sessionCookie = process.env.INSTAGRAM_SESSION_COOKIE || '';
+    const allowMockData = process.env.ALLOW_MOCK_DATA === 'true';
 
     // ===== PHASE 1: Discover usernames =====
     const hashtags = filters.search_hashtags || [];
     const keywords = filters.search_keywords || [];
     const maxAccounts = filters.max_accounts || 25;
 
-    const { usernames } = await discoverUsernames({
+    const { usernames, isMock: usedMockDiscovery } = await discoverUsernames({
       hashtags,
       searchKeywords: keywords,
       maxAccounts,
       sessionCookie,
     });
+
+    if (usedMockDiscovery && !allowMockData) {
+      await updateScan(scanId, {
+        status: 'failed',
+        finished_at: new Date().toISOString(),
+      });
+      return NextResponse.json(
+        {
+          error:
+            'Live Instagram discovery failed and mock data is disabled. Set ALLOW_MOCK_DATA=true to allow fallback.',
+        },
+        { status: 503 }
+      );
+    }
 
     if (usernames.length === 0) {
       await updateScan(scanId, {
@@ -74,15 +89,19 @@ export async function POST(
       try {
         await updateScanItem(item.id, { status: 'processing' });
 
-        const { profile, error: scrapeError } = await scrapeProfile(item.username, {
+        const { profile, error: scrapeError, isMock } = await scrapeProfile(item.username, {
           sessionCookie,
           postsToAnalyze: filters.last_x_posts_to_analyze || 12,
         });
 
-        if (scrapeError || !profile) {
+        if (scrapeError || !profile || (isMock && !allowMockData)) {
           await updateScanItem(item.id, {
             status: 'error',
-            error_message: scrapeError || 'Failed to scrape profile',
+            error_message:
+              scrapeError ||
+              (isMock && !allowMockData
+                ? 'Live profile scrape failed and mock data is disabled'
+                : 'Failed to scrape profile'),
           });
           errors++;
         } else {
