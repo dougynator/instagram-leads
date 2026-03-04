@@ -21,6 +21,7 @@ export default function ReportSummary({ scan, items, onClose }: ReportSummaryPro
   if (filters.min_engagement_rate) filterSummary.push(`Min engagement: ${filters.min_engagement_rate}%`);
   if (filters.max_engagement_rate) filterSummary.push(`Max engagement: ${filters.max_engagement_rate}%`);
   if (filters.contact_info_required) filterSummary.push('Contact info required');
+  if (filters.must_not_have_website) filterSummary.push('Must NOT have website');
   if (filters.bio_keywords_include?.length) filterSummary.push(`Include keywords: ${filters.bio_keywords_include.join(', ')}`);
   if (filters.bio_keywords_exclude?.length) filterSummary.push(`Exclude keywords: ${filters.bio_keywords_exclude.join(', ')}`);
   if (filters.location_country) {

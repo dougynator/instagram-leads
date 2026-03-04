@@ -66,6 +66,7 @@ export interface FilterCriteria {
   location_keywords?: string[];
   location_country?: string | null;
   location_belgium_provinces?: string[];
+  must_not_have_website?: boolean;
   contact_info_required?: boolean;
   contact_info_types?: {
     email?: boolean;
@@ -101,6 +102,7 @@ export const DEFAULT_FILTERS: FilterCriteria = {
   location_keywords: [],
   location_country: null,
   location_belgium_provinces: [],
+  must_not_have_website: false,
   contact_info_required: false,
   contact_info_types: { email: true, website: true, phone: true },
   scoring_enabled: true,

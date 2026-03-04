@@ -168,6 +168,17 @@ export function evaluateFilters(
     );
   }
 
+  // Must not have website
+  if (filters.must_not_have_website) {
+    const hasWebsite = !!profile.detected_website;
+    const passed = !hasWebsite;
+    addReason(
+      'must_not_have_website',
+      passed,
+      passed ? 'No website detected' : `Website detected: ${profile.detected_website}`
+    );
+  }
+
   // Contact info required
   if (filters.contact_info_required) {
     const hasEmail = !!profile.detected_email;

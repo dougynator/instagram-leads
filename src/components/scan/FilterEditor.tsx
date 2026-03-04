@@ -290,6 +290,25 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
+            checked={!!filters.must_not_have_website}
+            onChange={(e) => {
+              const mustNotHaveWebsite = e.target.checked;
+              onChange({
+                ...filters,
+                must_not_have_website: mustNotHaveWebsite,
+                contact_info_types: mustNotHaveWebsite
+                  ? { ...filters.contact_info_types, website: false }
+                  : filters.contact_info_types,
+              });
+            }}
+            className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20"
+          />
+          <span className="text-sm font-medium">Must NOT have website {opt}</span>
+        </label>
+
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
             checked={!!filters.contact_info_required}
             onChange={(e) => update('contact_info_required', e.target.checked)}
             className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20"
@@ -311,11 +330,20 @@ export default function FilterEditor({ filters, onChange, compact = false }: Fil
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                checked={filters.contact_info_types?.website !== false}
+                checked={
+                  !filters.must_not_have_website && filters.contact_info_types?.website !== false
+                }
                 onChange={(e) => updateContactType('website', e.target.checked)}
+                disabled={!!filters.must_not_have_website}
                 className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20"
               />
-              <span className="text-sm">Website</span>
+              <span
+                className={`text-sm ${
+                  filters.must_not_have_website ? 'text-muted line-through' : ''
+                }`}
+              >
+                Website
+              </span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
