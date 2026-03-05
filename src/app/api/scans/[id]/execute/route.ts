@@ -77,7 +77,7 @@ export async function POST(
     await safeUpdateScan(scanId, { status: 'running' });
 
     const filters: FilterCriteria = scan.filters || {};
-    const allowMockData = process.env.ALLOW_MOCK_DATA === 'true';
+    const realLeadsOnly = true;
     const configuredCookies = parseSessionCookies();
 
     // ===== PHASE 1: Discover usernames =====
@@ -89,6 +89,7 @@ export async function POST(
 
     let usernames: string[] = [];
     let discoveryCookieUsed = '';
+    let discoveredLive = false;
 
     for (const cookie of discoveryCookieCandidates) {
       const discovery = await discoverUsernames({
@@ -97,12 +98,33 @@ export async function POST(
         maxAccounts,
         sessionCookie: cookie || undefined,
       });
-      usernames = discovery.usernames;
-      discoveryCookieUsed = cookie;
+      if (!discovery.isMock) {
+        discoveredLive = true;
+        usernames = discovery.usernames;
+        discoveryCookieUsed = cookie;
+        if (usernames.length > 0) break;
+        continue;
+      }
 
-      if (!discovery.isMock || allowMockData) {
+      if (!realLeadsOnly) {
+        usernames = discovery.usernames;
+        discoveryCookieUsed = cookie;
         break;
       }
+    }
+
+    if (realLeadsOnly && (!discoveredLive || usernames.length === 0)) {
+      await safeUpdateScan(scanId, {
+        status: 'failed',
+        finished_at: new Date().toISOString(),
+      });
+      return NextResponse.json(
+        {
+          error:
+            'No live Instagram leads could be discovered for the current search terms/session.',
+        },
+        { status: 503 }
+      );
     }
 
     if (usernames.length === 0) {
@@ -160,6 +182,7 @@ export async function POST(
 
         let profile = null;
         let scrapeError: string | null = null;
+        let gotLiveProfile = false;
 
         for (const cookie of scrapeCookieCandidates) {
           const attempt = await scrapeProfile(item.username, {
@@ -170,6 +193,13 @@ export async function POST(
           if (attempt.profile && !attempt.isMock) {
             profile = attempt.profile;
             scrapeError = null;
+             gotLiveProfile = true;
+            break;
+          }
+
+          if (!realLeadsOnly && attempt.profile) {
+            profile = attempt.profile;
+            scrapeError = attempt.error;
             break;
           }
 
@@ -177,11 +207,11 @@ export async function POST(
           scrapeError = attempt.error;
         }
 
-        if (scrapeError || !profile) {
+        if (scrapeError || !profile || (realLeadsOnly && !gotLiveProfile)) {
           await safeUpdateScanItem(item.id, {
             status: 'error',
             error_message:
-              scrapeError || 'Failed to scrape profile',
+              scrapeError || (realLeadsOnly ? 'Live profile scrape unavailable' : 'Failed to scrape profile'),
           });
           errors++;
         } else {
