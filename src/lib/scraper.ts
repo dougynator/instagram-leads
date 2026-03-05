@@ -120,14 +120,27 @@ async function discoverFromHashtag(
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
     if (!res.ok) return [];
 
-    const data = await res.json();
+    const data = (await res.json()) as {
+      data?: {
+        recent?: {
+          sections?: Array<{
+            layout_content?: {
+              medias?: Array<{ media?: { user?: { username?: string } } }>;
+            };
+          }>;
+        };
+        hashtag?: {
+          edge_hashtag_to_media?: {
+            edges?: Array<{ node?: { owner?: { username?: string } } }>;
+          };
+        };
+      };
+    };
     const edges =
       data?.data?.recent?.sections?.flatMap(
-        (s: any) => s?.layout_content?.medias?.map((m: any) => m?.media?.user?.username) || []
+        (s) => s?.layout_content?.medias?.map((m) => m?.media?.user?.username) || []
       ) ||
-      data?.data?.hashtag?.edge_hashtag_to_media?.edges?.map(
-        (e: any) => e?.node?.owner?.username
-      ) ||
+      data?.data?.hashtag?.edge_hashtag_to_media?.edges?.map((e) => e?.node?.owner?.username) ||
       [];
 
     return edges.filter(Boolean) as string[];
@@ -147,11 +160,63 @@ async function discoverFromSearch(
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
     if (!res.ok) return [];
 
-    const data = await res.json();
+    const data = (await res.json()) as {
+      users?: Array<{ user?: { username?: string } }>;
+    };
     const users = data?.users || [];
-    return users.map((u: any) => u?.user?.username).filter(Boolean) as string[];
+    return users.map((u) => u?.user?.username).filter(Boolean) as string[];
   } catch (err) {
     console.log(`Search discovery failed for "${keyword}":`, err);
+    return [];
+  }
+}
+
+function extractInstagramUsernamesFromHtml(html: string): string[] {
+  const usernames = new Set<string>();
+  const regex = /https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)\/?/gi;
+  let match: RegExpExecArray | null = regex.exec(html);
+
+  while (match) {
+    const candidate = (match[1] || '').toLowerCase().trim();
+    if (
+      candidate &&
+      ![
+        'p',
+        'reel',
+        'reels',
+        'stories',
+        'explore',
+        'accounts',
+        'about',
+        'developer',
+        'tv',
+      ].includes(candidate)
+    ) {
+      usernames.add(candidate);
+    }
+    match = regex.exec(html);
+  }
+
+  return [...usernames];
+}
+
+async function discoverFromWebSearch(term: string): Promise<string[]> {
+  const query = `site:instagram.com "${term}"`;
+  const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const headers = {
+    'User-Agent':
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    Accept: 'text/html,application/xhtml+xml',
+    'Accept-Language': 'en-US,en;q=0.9',
+  };
+
+  try {
+    const res = await fetch(searchUrl, { headers, signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return [];
+    const html = await res.text();
+    return extractInstagramUsernamesFromHtml(html);
+  } catch (err) {
+    console.log(`Web discovery failed for "${term}":`, err);
     return [];
   }
 }
@@ -174,7 +239,7 @@ function mockDiscoverUsernames(
   };
 
   const allTerms = [...hashtags, ...keywords].map((t) => t.toLowerCase().replace(/^#/, ''));
-  let pool: string[] = [];
+  const pool: string[] = [];
 
   for (const term of allTerms) {
     for (const [niche, names] of Object.entries(niches)) {
@@ -252,6 +317,21 @@ export async function discoverUsernames(options: DiscoveryOptions): Promise<{
     }
   }
 
+  // Fallback live discovery via web search when Instagram API is blocked.
+  // This still yields real Instagram usernames (not mock profiles).
+  if (allUsernames.size === 0) {
+    const webTerms = [
+      ...hashtags.map((t) => t.replace(/^#/, '').trim()).filter(Boolean),
+      ...searchKeywords.map((k) => k.trim()).filter(Boolean),
+    ];
+    for (const term of webTerms) {
+      if (allUsernames.size >= maxAccounts) break;
+      await sleep(getRandomDelay(800, 1800));
+      const found = await discoverFromWebSearch(term);
+      found.forEach((u) => allUsernames.add(u));
+    }
+  }
+
   // Only fall back to mock when live discovery found zero accounts.
   // Returning partial live results is better than failing production scans.
   if (allUsernames.size === 0 && liveFailed) {
@@ -288,13 +368,43 @@ async function scrapeFromInstagramAPI(
 
     if (!response.ok) return null;
 
-    const data = await response.json();
+    const data = (await response.json()) as {
+      data?: {
+        user?: {
+          username?: string;
+          full_name?: string;
+          biography?: string;
+          external_url?: string;
+          bio_links?: Array<{ url?: string }>;
+          is_private?: boolean;
+          profile_pic_url_hd?: string;
+          profile_pic_url?: string;
+          edge_followed_by?: { count?: number };
+          edge_follow?: { count?: number };
+          edge_owner_to_timeline_media?: {
+            count?: number;
+            edges?: Array<{
+              node?: {
+                shortcode?: string;
+                edge_liked_by?: { count?: number };
+                edge_media_preview_like?: { count?: number };
+                edge_media_to_comment?: { count?: number };
+                taken_at_timestamp?: number;
+                edge_media_to_caption?: {
+                  edges?: Array<{ node?: { text?: string } }>;
+                };
+              };
+            }>;
+          };
+        };
+      };
+    };
     const user = data?.data?.user;
     if (!user) return null;
 
     const postEdges = user.edge_owner_to_timeline_media?.edges || [];
     const postsToGet = options.postsToAnalyze || 12;
-    const recentPosts: RecentPost[] = postEdges.slice(0, postsToGet).map((edge: any) => ({
+    const recentPosts: RecentPost[] = postEdges.slice(0, postsToGet).map((edge) => ({
       shortcode: edge.node?.shortcode,
       likes: edge.node?.edge_liked_by?.count || edge.node?.edge_media_preview_like?.count || 0,
       comments: edge.node?.edge_media_to_comment?.count || 0,
