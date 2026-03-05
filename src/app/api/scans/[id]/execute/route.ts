@@ -6,7 +6,23 @@ import { FilterCriteria } from '@/lib/types';
 
 function parseSessionCookies(): string[] {
   const raw = process.env.INSTAGRAM_SESSION_COOKIES || process.env.INSTAGRAM_SESSION_COOKIE || '';
-  return [...new Set(raw.split(/[\n,]/).map((v) => v.trim()).filter(Boolean))];
+  const normalized = raw
+    .split(/[\n,]/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => {
+      let v = value.replace(/^['"]|['"]$/g, '');
+      if (v.toLowerCase().startsWith('sessionid=')) {
+        v = v.slice('sessionid='.length);
+      }
+      if (v.includes(';')) {
+        v = v.split(';')[0].trim();
+      }
+      return v.trim();
+    })
+    .filter(Boolean);
+
+  return [...new Set(normalized)];
 }
 
 function prioritizeCookie(primary: string, allCookies: string[]): string[] {
