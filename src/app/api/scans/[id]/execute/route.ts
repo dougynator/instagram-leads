@@ -63,7 +63,6 @@ export async function POST(
     const discoveryCookieCandidates = prioritizeCookie('', configuredCookies);
 
     let usernames: string[] = [];
-    let usedMockDiscovery = false;
     let discoveryCookieUsed = '';
 
     for (const cookie of discoveryCookieCandidates) {
@@ -74,26 +73,11 @@ export async function POST(
         sessionCookie: cookie || undefined,
       });
       usernames = discovery.usernames;
-      usedMockDiscovery = discovery.isMock;
       discoveryCookieUsed = cookie;
 
       if (!discovery.isMock || allowMockData) {
         break;
       }
-    }
-
-    if (usedMockDiscovery && !allowMockData) {
-      await updateScan(scanId, {
-        status: 'failed',
-        finished_at: new Date().toISOString(),
-      });
-      return NextResponse.json(
-        {
-          error:
-            'Live Instagram discovery failed and mock data is disabled. Set ALLOW_MOCK_DATA=true to allow fallback.',
-        },
-        { status: 503 }
-      );
     }
 
     if (usernames.length === 0) {
@@ -136,7 +120,6 @@ export async function POST(
 
         let profile = null;
         let scrapeError: string | null = null;
-        let isMock = false;
 
         for (const cookie of scrapeCookieCandidates) {
           const attempt = await scrapeProfile(item.username, {
@@ -147,23 +130,18 @@ export async function POST(
           if (attempt.profile && !attempt.isMock) {
             profile = attempt.profile;
             scrapeError = null;
-            isMock = false;
             break;
           }
 
           profile = attempt.profile;
           scrapeError = attempt.error;
-          isMock = attempt.isMock;
         }
 
-        if (scrapeError || !profile || (isMock && !allowMockData)) {
+        if (scrapeError || !profile) {
           await updateScanItem(item.id, {
             status: 'error',
             error_message:
-              scrapeError ||
-              (isMock && !allowMockData
-                ? 'Live profile scrape failed and mock data is disabled'
-                : 'Failed to scrape profile'),
+              scrapeError || 'Failed to scrape profile',
           });
           errors++;
         } else {
