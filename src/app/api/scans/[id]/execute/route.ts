@@ -32,6 +32,15 @@ function prioritizeCookie(primary: string, allCookies: string[]): string[] {
   return [...ordered, ''];
 }
 
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const msg = (error as { message?: unknown }).message;
+    if (typeof msg === 'string' && msg.trim()) return msg;
+  }
+  return 'Scan execution failed';
+}
+
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -96,12 +105,27 @@ export async function POST(
       username,
       profile_url: `https://instagram.com/${username}`,
     }));
-    await createScanItems(items);
+    let persistedItems = [];
+    try {
+      persistedItems = await createScanItems(items);
+    } catch {
+      // Fallback: try per-item inserts so one bad row won't fail the whole scan.
+      const recovered = [];
+      for (const row of items) {
+        try {
+          const inserted = await createScanItems([row]);
+          recovered.push(...inserted);
+        } catch {
+          // Skip row-level insert errors.
+        }
+      }
+      persistedItems = recovered;
+    }
 
     await updateScan(scanId, { total_input: usernames.length });
 
     // ===== PHASE 2: Scrape each profile and apply filters =====
-    const scanItems = await getScanItems(scanId);
+    const scanItems = persistedItems.length > 0 ? persistedItems : await getScanItems(scanId);
     let scanned = 0;
     let matched = 0;
     let errors = 0;
@@ -197,7 +221,7 @@ export async function POST(
       status: 'failed',
       finished_at: new Date().toISOString(),
     });
-    const message = error instanceof Error ? error.message : 'Scan execution failed';
+    const message = toErrorMessage(error);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
