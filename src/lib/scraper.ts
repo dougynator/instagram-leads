@@ -412,6 +412,79 @@ interface ScrapeOptions {
   postsToAnalyze?: number;
 }
 
+function parseCompactCount(raw?: string): number {
+  if (!raw) return 0;
+  const cleaned = raw.replace(/,/g, '').trim().toLowerCase();
+  if (!cleaned) return 0;
+  if (cleaned.endsWith('k')) return Math.round(parseFloat(cleaned.slice(0, -1)) * 1000);
+  if (cleaned.endsWith('m')) return Math.round(parseFloat(cleaned.slice(0, -1)) * 1000000);
+  const value = Number(cleaned);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function decodeEscaped(value: string): string {
+  return value
+    .replace(/\\u0026/g, '&')
+    .replace(/\\\//g, '/')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"');
+}
+
+async function scrapeFromProfilePageHtml(
+  username: string,
+  options: ScrapeOptions
+): Promise<ScrapedProfile | null> {
+  try {
+    const headers = getHeaders(options.sessionCookie);
+    const profileUrl = `${INSTAGRAM_BASE}/${encodeURIComponent(username)}/`;
+    const response = await fetch(profileUrl, { headers, signal: AbortSignal.timeout(15000) });
+    if (!response.ok) return null;
+
+    const html = await response.text();
+    if (!html || html.includes("Sorry, this page isn't available")) return null;
+
+    const titleMatch = html.match(/<meta property="og:title" content="([^"]*)"/i);
+    const descMatch = html.match(/<meta property="og:description" content="([^"]*)"/i);
+    const imageMatch = html.match(/<meta property="og:image" content="([^"]*)"/i);
+    const externalUrlMatch = html.match(/"external_url":"([^"]*)"/i);
+
+    const title = decodeEscaped(titleMatch?.[1] || '');
+    const description = decodeEscaped(descMatch?.[1] || '');
+    const displayName = title.includes('(@') ? title.split('(@')[0].trim() : title;
+
+    const followersRaw = description.match(/([\d.,kKmM]+)\s+Followers/i)?.[1];
+    const followingRaw = description.match(/([\d.,kKmM]+)\s+Following/i)?.[1];
+    const postsRaw = description.match(/([\d.,kKmM]+)\s+Posts/i)?.[1];
+
+    const bioMatch = description.match(/on Instagram:\s*"([^"]*)"/i);
+    const bio = decodeEscaped(bioMatch?.[1] || '');
+    const externalLink = decodeEscaped(externalUrlMatch?.[1] || '');
+    const contact = extractContactInfo(bio, externalLink);
+
+    return {
+      username,
+      display_name: displayName || username,
+      bio,
+      external_link: externalLink || undefined,
+      follower_count: parseCompactCount(followersRaw),
+      following_count: parseCompactCount(followingRaw),
+      post_count: parseCompactCount(postsRaw),
+      recent_posts: [],
+      avg_likes: 0,
+      avg_comments: 0,
+      engagement_rate: 0,
+      ...contact,
+      last_post_date: null,
+      is_private: html.toLowerCase().includes('this account is private'),
+      profile_pic_url: decodeEscaped(imageMatch?.[1] || ''),
+      scraped_at: new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function scrapeFromInstagramAPI(
   username: string,
   options: ScrapeOptions
@@ -618,6 +691,8 @@ export async function scrapeProfile(
   try {
     const profile = await scrapeFromInstagramAPI(cleanUsername, options);
     if (profile) return { profile, error: null, isMock: false };
+    const htmlProfile = await scrapeFromProfilePageHtml(cleanUsername, options);
+    if (htmlProfile) return { profile: htmlProfile, error: null, isMock: false };
   } catch {
     // fall through to mock
   }
