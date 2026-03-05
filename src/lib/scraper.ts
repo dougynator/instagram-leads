@@ -418,12 +418,12 @@ async function scrapeFromInstagramAPI(
 ): Promise<ScrapedProfile | null> {
   try {
     const headers = getHeaders(options.sessionCookie);
-    const apiUrl = `${INSTAGRAM_BASE}/api/v1/users/web_profile_info/?username=${username}`;
-    const response = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(15000) });
+    const profileUrls = [
+      `https://i.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
+      `${INSTAGRAM_BASE}/api/v1/users/web_profile_info/?username=${encodeURIComponent(username)}`,
+    ];
 
-    if (!response.ok) return null;
-
-    const data = (await response.json()) as {
+    let data: {
       data?: {
         user?: {
           username?: string;
@@ -453,9 +453,50 @@ async function scrapeFromInstagramAPI(
           };
         };
       };
-    };
+    } | null = null;
+
+    for (const apiUrl of profileUrls) {
+      const response = await fetch(apiUrl, { headers, signal: AbortSignal.timeout(15000) });
+      if (!response.ok) continue;
+      const parsed = (await response.json()) as {
+        data?: {
+          user?: {
+            username?: string;
+            full_name?: string;
+            biography?: string;
+            external_url?: string;
+            bio_links?: Array<{ url?: string }>;
+            is_private?: boolean;
+            profile_pic_url_hd?: string;
+            profile_pic_url?: string;
+            edge_followed_by?: { count?: number };
+            edge_follow?: { count?: number };
+            edge_owner_to_timeline_media?: {
+              count?: number;
+              edges?: Array<{
+                node?: {
+                  shortcode?: string;
+                  edge_liked_by?: { count?: number };
+                  edge_media_preview_like?: { count?: number };
+                  edge_media_to_comment?: { count?: number };
+                  taken_at_timestamp?: number;
+                  edge_media_to_caption?: {
+                    edges?: Array<{ node?: { text?: string } }>;
+                  };
+                };
+              }>;
+            };
+          };
+        };
+      };
+      if (parsed?.data?.user) {
+        data = parsed;
+        break;
+      }
+    }
+
+    if (!data?.data?.user) return null;
     const user = data?.data?.user;
-    if (!user) return null;
 
     const postEdges = user.edge_owner_to_timeline_media?.edges || [];
     const postsToGet = options.postsToAnalyze || 12;
