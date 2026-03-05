@@ -27,8 +27,9 @@ function parseSessionCookies(): string[] {
 
 function prioritizeCookie(primary: string, allCookies: string[]): string[] {
   const unique = [...new Set(allCookies.filter(Boolean))];
-  if (!primary) return unique;
-  return [primary, ...unique.filter((cookie) => cookie !== primary)];
+  const ordered = !primary ? unique : [primary, ...unique.filter((cookie) => cookie !== primary)];
+  // Always try a no-cookie request as last fallback, so a stale cookie cannot block discovery.
+  return [...ordered, ''];
 }
 
 export async function POST(
@@ -59,10 +60,7 @@ export async function POST(
     const keywords = filters.search_keywords || [];
     const maxAccounts = filters.max_accounts || 25;
 
-    const discoveryCookieCandidates = [...configuredCookies];
-    if (discoveryCookieCandidates.length === 0) {
-      discoveryCookieCandidates.push('');
-    }
+    const discoveryCookieCandidates = prioritizeCookie('', configuredCookies);
 
     let usernames: string[] = [];
     let usedMockDiscovery = false;
@@ -135,9 +133,6 @@ export async function POST(
         await updateScanItem(item.id, { status: 'processing' });
 
         const scrapeCookieCandidates = prioritizeCookie(discoveryCookieUsed, configuredCookies);
-        if (scrapeCookieCandidates.length === 0) {
-          scrapeCookieCandidates.push('');
-        }
 
         let profile = null;
         let scrapeError: string | null = null;
