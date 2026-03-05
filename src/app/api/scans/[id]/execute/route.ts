@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getScan, updateScan, createScanItems, getScanItems, updateScanItem } from '@/lib/db';
 import { discoverUsernames, scrapeProfile } from '@/lib/scraper';
 import { evaluateFilters, computeScore } from '@/lib/scoring';
-import { FilterCriteria } from '@/lib/types';
+import { FilterCriteria, Scan, ScanItem } from '@/lib/types';
 
 function parseSessionCookies(): string[] {
   const raw = process.env.INSTAGRAM_SESSION_COOKIES || process.env.INSTAGRAM_SESSION_COOKIE || '';
@@ -41,7 +41,7 @@ function toErrorMessage(error: unknown): string {
   return 'Scan execution failed';
 }
 
-async function safeUpdateScan(scanId: string, payload: Partial<{ status: string; total_input: number; total_scanned: number; total_matched: number; total_errors: number; finished_at: string }>) {
+async function safeUpdateScan(scanId: string, payload: Partial<Scan>) {
   try {
     await updateScan(scanId, payload);
   } catch (error) {
@@ -49,7 +49,7 @@ async function safeUpdateScan(scanId: string, payload: Partial<{ status: string;
   }
 }
 
-async function safeUpdateScanItem(itemId: string, payload: Partial<{ status: string; error_message: string; scraped_data: unknown; score: number; matched: boolean; match_reasons: unknown; profile_url: string }>) {
+async function safeUpdateScanItem(itemId: string, payload: Partial<ScanItem>) {
   try {
     await updateScanItem(itemId, payload);
   } catch (error) {
