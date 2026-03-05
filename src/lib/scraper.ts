@@ -252,8 +252,9 @@ export async function discoverUsernames(options: DiscoveryOptions): Promise<{
     }
   }
 
-  // If live discovery didn't find enough, use mock data
-  if (allUsernames.size < maxAccounts && (liveFailed || allUsernames.size === 0)) {
+  // Only fall back to mock when live discovery found zero accounts.
+  // Returning partial live results is better than failing production scans.
+  if (allUsernames.size === 0 && liveFailed) {
     console.log('Using mock discovery for remaining accounts');
     const mockNames = mockDiscoverUsernames(hashtags, searchKeywords, maxAccounts - allUsernames.size);
     mockNames.forEach((u) => allUsernames.add(u));
