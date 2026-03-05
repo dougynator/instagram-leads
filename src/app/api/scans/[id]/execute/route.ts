@@ -41,6 +41,22 @@ function toErrorMessage(error: unknown): string {
   return 'Scan execution failed';
 }
 
+async function safeUpdateScan(scanId: string, payload: Partial<{ status: string; total_input: number; total_scanned: number; total_matched: number; total_errors: number; finished_at: string }>) {
+  try {
+    await updateScan(scanId, payload);
+  } catch (error) {
+    console.warn('updateScan failed (non-fatal):', toErrorMessage(error));
+  }
+}
+
+async function safeUpdateScanItem(itemId: string, payload: Partial<{ status: string; error_message: string; scraped_data: unknown; score: number; matched: boolean; match_reasons: unknown; profile_url: string }>) {
+  try {
+    await updateScanItem(itemId, payload);
+  } catch (error) {
+    console.warn('updateScanItem failed (non-fatal):', toErrorMessage(error));
+  }
+}
+
 export async function POST(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -58,7 +74,7 @@ export async function POST(
     }
 
     // Mark as running
-    await updateScan(scanId, { status: 'running' });
+    await safeUpdateScan(scanId, { status: 'running' });
 
     const filters: FilterCriteria = scan.filters || {};
     const allowMockData = process.env.ALLOW_MOCK_DATA === 'true';
@@ -90,7 +106,7 @@ export async function POST(
     }
 
     if (usernames.length === 0) {
-      await updateScan(scanId, {
+      await safeUpdateScan(scanId, {
         status: 'completed',
         total_input: 0,
         total_scanned: 0,
@@ -122,7 +138,7 @@ export async function POST(
       persistedItems = recovered;
     }
 
-    await updateScan(scanId, { total_input: usernames.length });
+    await safeUpdateScan(scanId, { total_input: usernames.length });
 
     // ===== PHASE 2: Scrape each profile and apply filters =====
     const scanItems = persistedItems.length > 0 ? persistedItems : await getScanItems(scanId);
@@ -138,7 +154,7 @@ export async function POST(
       }
 
       try {
-        await updateScanItem(item.id, { status: 'processing' });
+        await safeUpdateScanItem(item.id, { status: 'processing' });
 
         const scrapeCookieCandidates = prioritizeCookie(discoveryCookieUsed, configuredCookies);
 
@@ -162,7 +178,7 @@ export async function POST(
         }
 
         if (scrapeError || !profile) {
-          await updateScanItem(item.id, {
+          await safeUpdateScanItem(item.id, {
             status: 'error',
             error_message:
               scrapeError || 'Failed to scrape profile',
@@ -172,7 +188,7 @@ export async function POST(
           const { matched: isMatched, reasons } = evaluateFilters(profile, filters);
           const score = computeScore(profile, filters);
 
-          await updateScanItem(item.id, {
+          await safeUpdateScanItem(item.id, {
             scraped_data: profile,
             score,
             matched: isMatched,
@@ -185,20 +201,20 @@ export async function POST(
         }
 
         scanned++;
-        await updateScan(scanId, {
+        await safeUpdateScan(scanId, {
           total_scanned: scanned,
           total_matched: matched,
           total_errors: errors,
         });
       } catch (err) {
         console.error(`Error processing ${item.username}:`, err);
-        await updateScanItem(item.id, {
+        await safeUpdateScanItem(item.id, {
           status: 'error',
           error_message: err instanceof Error ? err.message : 'Unknown error',
         });
         errors++;
         scanned++;
-        await updateScan(scanId, {
+        await safeUpdateScan(scanId, {
           total_scanned: scanned,
           total_matched: matched,
           total_errors: errors,
@@ -207,7 +223,7 @@ export async function POST(
     }
 
     // Done
-    await updateScan(scanId, {
+    await safeUpdateScan(scanId, {
       status: 'completed',
       total_scanned: scanned,
       total_matched: matched,
@@ -217,7 +233,7 @@ export async function POST(
 
     return NextResponse.json({ status: 'completed', scanned, matched, errors });
   } catch (error: unknown) {
-    await updateScan(scanId, {
+    await safeUpdateScan(scanId, {
       status: 'failed',
       finished_at: new Date().toISOString(),
     });
