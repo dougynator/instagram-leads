@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getScan, updateScan, createScanItems, getScanItems, updateScanItem } from '@/lib/db';
-import { discoverUsernames, scrapeProfile, validateSessionCookie } from '@/lib/scraper';
+import { discoverUsernames, scrapeProfile } from '@/lib/scraper';
 import { evaluateFilters, computeScore } from '@/lib/scoring';
 import { FilterCriteria } from '@/lib/types';
 
@@ -38,34 +38,12 @@ export async function POST(
     const allowMockData = process.env.ALLOW_MOCK_DATA === 'true';
     const configuredCookies = parseSessionCookies();
 
-    let validCookie = '';
-    for (const cookie of configuredCookies) {
-      if (await validateSessionCookie(cookie)) {
-        validCookie = cookie;
-        break;
-      }
-    }
-
-    if (!validCookie && !allowMockData) {
-      await updateScan(scanId, {
-        status: 'failed',
-        finished_at: new Date().toISOString(),
-      });
-      return NextResponse.json(
-        {
-          error:
-            'No valid Instagram session cookie found. Update INSTAGRAM_SESSION_COOKIES (or INSTAGRAM_SESSION_COOKIE) in environment variables and redeploy.',
-        },
-        { status: 503 }
-      );
-    }
-
     // ===== PHASE 1: Discover usernames =====
     const hashtags = filters.search_hashtags || [];
     const keywords = filters.search_keywords || [];
     const maxAccounts = filters.max_accounts || 25;
 
-    const discoveryCookieCandidates = prioritizeCookie(validCookie, configuredCookies);
+    const discoveryCookieCandidates = [...configuredCookies];
     if (discoveryCookieCandidates.length === 0) {
       discoveryCookieCandidates.push('');
     }
