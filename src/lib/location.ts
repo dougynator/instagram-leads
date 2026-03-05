@@ -52,6 +52,10 @@ const BELGIUM_PROVINCE_KEYWORDS: Record<string, string[]> = {
   'West Flanders': ['west flanders', 'west-vlaanderen', 'west vlaanderen'],
 };
 
+export function getBelgiumProvinceKeywords(province: string): string[] {
+  return BELGIUM_PROVINCE_KEYWORDS[province] || [];
+}
+
 export function getLocationKeywordsFromFilters(filters: FilterCriteria): string[] {
   const selectedCountry = filters.location_country?.trim().toLowerCase();
   if (!selectedCountry) return [];

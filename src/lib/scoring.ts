@@ -1,5 +1,5 @@
 import { FilterCriteria, ScrapedProfile, MatchReason, ScoringWeights } from './types';
-import { getLocationKeywordsFromFilters } from './location';
+import { getBelgiumProvinceKeywords, getLocationKeywordsFromFilters } from './location';
 
 // ==================== Filter Evaluation ====================
 
@@ -18,6 +18,42 @@ function containsKeyword(text: string, keyword: string): boolean {
   }
 
   return text.includes(normalized);
+}
+
+function detectCountryFromPhone(text: string): string | null {
+  const normalized = text.replace(/\s+/g, '');
+  if (/(^|[^\d])(\+32|0032)/.test(normalized)) return 'belgium';
+  if (/(^|[^\d])(\+31|0031)/.test(normalized)) return 'netherlands';
+  if (/(^|[^\d])(\+33|0033)/.test(normalized)) return 'france';
+  if (/(^|[^\d])(\+49|0049)/.test(normalized)) return 'germany';
+  if (/(^|[^\d])(\+352|00352)/.test(normalized)) return 'luxembourg';
+  return null;
+}
+
+function detectCountryFromWebsite(profile: ScrapedProfile): string | null {
+  const raw = profile.detected_website || profile.external_link || '';
+  if (!raw) return null;
+  try {
+    const url = raw.startsWith('http') ? new URL(raw) : new URL(`https://${raw}`);
+    const host = url.hostname.toLowerCase();
+    if (host.endsWith('.be')) return 'belgium';
+    if (host.endsWith('.nl')) return 'netherlands';
+    if (host.endsWith('.fr')) return 'france';
+    if (host.endsWith('.de')) return 'germany';
+    if (host.endsWith('.lu')) return 'luxembourg';
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function detectCountryFromFlag(text: string): string | null {
+  if (text.includes('🇧🇪')) return 'belgium';
+  if (text.includes('🇳🇱')) return 'netherlands';
+  if (text.includes('🇫🇷')) return 'france';
+  if (text.includes('🇩🇪')) return 'germany';
+  if (text.includes('🇱🇺')) return 'luxembourg';
+  return null;
 }
 
 export function evaluateFilters(
@@ -174,13 +210,57 @@ export function evaluateFilters(
   // Location keywords
   if (locationKeywords.length) {
     const matched = locationKeywords.filter((kw) => containsKeyword(locationText, kw));
-    const passed = matched.length > 0;
-    const criteriaLabel = filters.location_country ? 'location_country' : 'location_keywords';
+    const combinedText = [
+      profile.detected_phone || '',
+      profile.bio || '',
+      profile.display_name || '',
+      ...(profile.recent_posts || []).map((post) => post.caption || ''),
+    ].join(' ');
+    const selectedCountry = filters.location_country?.trim().toLowerCase() || null;
+    const phoneCountry = detectCountryFromPhone(combinedText);
+    const websiteCountry = detectCountryFromWebsite(profile);
+    const flagCountry = detectCountryFromFlag(combinedText);
+
+    const signalMatches: string[] = [];
+    if (selectedCountry && phoneCountry === selectedCountry) signalMatches.push(`phone code (${selectedCountry})`);
+    if (selectedCountry && websiteCountry === selectedCountry) signalMatches.push(`website TLD (${selectedCountry})`);
+    if (selectedCountry && flagCountry === selectedCountry) signalMatches.push(`flag emoji (${selectedCountry})`);
+
+    let passed = matched.length > 0 || signalMatches.length > 0;
+    const criteriaLabel = selectedCountry ? 'location_country' : 'location_keywords';
+
+    // For province-specific Belgian searches, require province evidence in text.
+    if (
+      passed &&
+      selectedCountry === 'belgium' &&
+      (filters.location_belgium_provinces || []).length > 0
+    ) {
+      const selectedProvinces = filters.location_belgium_provinces || [];
+      const matchedProvinces = selectedProvinces.filter((province) =>
+        getBelgiumProvinceKeywords(province).some((kw) => containsKeyword(locationText, kw))
+      );
+      const provincePassed = matchedProvinces.length > 0;
+      addReason(
+        'location_belgium_provinces',
+        provincePassed,
+        provincePassed
+          ? `Belgium province match: ${matchedProvinces.join(', ')}`
+          : `No province match for: ${selectedProvinces.join(', ')}`
+      );
+      passed = passed && provincePassed;
+    }
+
+    const details = [
+      matched.length ? `keywords: ${matched.join(', ')}` : '',
+      signalMatches.length ? `signals: ${signalMatches.join(', ')}` : '',
+    ]
+      .filter(Boolean)
+      .join(' | ');
     addReason(
       criteriaLabel,
       passed,
       passed
-        ? `Location match: ${matched.join(', ')}`
+        ? `Location match${details ? ` (${details})` : ''}`
         : `No location match for: ${locationKeywords.join(', ')}`
     );
   }
