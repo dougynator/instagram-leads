@@ -5,20 +5,25 @@ import { evaluateFilters, computeScore } from '@/lib/scoring';
 import { FilterCriteria, Scan, ScanItem } from '@/lib/types';
 
 function parseSessionCookies(): string[] {
-  const raw = process.env.INSTAGRAM_SESSION_COOKIES || process.env.INSTAGRAM_SESSION_COOKIE || '';
+  const raw =
+    process.env.INSTAGRAM_SESSION_COOKIES ||
+    process.env.INSTAGRAM_COOKIE_HEADER ||
+    process.env.INSTAGRAM_SESSION_COOKIE ||
+    '';
   const normalized = raw
-    .split(/[\n,]/)
+    // Use newline separators for multiple cookie candidates.
+    .split(/\n+/)
     .map((value) => value.trim())
     .filter(Boolean)
     .map((value) => {
       let v = value.replace(/^['"]|['"]$/g, '');
-      if (v.toLowerCase().startsWith('sessionid=')) {
+      v = v.replace(/^cookie:\s*/i, '').trim();
+      // Keep full cookie headers intact (sessionid + csrftoken + ds_user_id ...).
+      // For legacy plain "sessionid=..." input we normalize to just the value.
+      if (!v.includes(';') && v.toLowerCase().startsWith('sessionid=')) {
         v = v.slice('sessionid='.length);
       }
-      if (v.includes(';')) {
-        v = v.split(';')[0].trim();
-      }
-      return v.trim();
+      return v;
     })
     .filter(Boolean);
 
@@ -121,7 +126,7 @@ export async function POST(
       return NextResponse.json(
         {
           error:
-            'No live Instagram leads could be discovered for the current search terms/session.',
+            'No live Instagram leads could be discovered. Add search hashtags/keywords and set INSTAGRAM_COOKIE_HEADER with a full browser cookie string (sessionid + csrftoken + ds_user_id).',
         },
         { status: 503 }
       );

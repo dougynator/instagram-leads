@@ -16,8 +16,9 @@ Edit `.env.local` with your values:
 - `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anon key
 - `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key (server-side only)
-- `INSTAGRAM_SESSION_COOKIE` - (Optional) single Instagram session cookie for authenticated scraping
-- `INSTAGRAM_SESSION_COOKIES` - (Optional) multiple session cookies (comma/newline separated) for automatic rotation
+- `INSTAGRAM_SESSION_COOKIE` - (Optional) single Instagram `sessionid` value
+- `INSTAGRAM_COOKIE_HEADER` - (Recommended) full browser cookie header (`sessionid`, `csrftoken`, `ds_user_id`, ...)
+- `INSTAGRAM_SESSION_COOKIES` - (Optional) multiple cookie candidates (newline separated) for automatic rotation
 - `ALLOW_MOCK_DATA` - Optional fallback toggle (`false` by default; set `true` for demo data)
 
 > **Note:** The app works without Supabase configured! It falls back to an in-memory store for local development/testing. Data won't persist across restarts in this mode.
@@ -49,9 +50,10 @@ The scraper attempts to use Instagram's web API.
 - With `ALLOW_MOCK_DATA=true` (demo/testing): it can fall back to realistic mock data so the UI remains fully functional even if Instagram blocks requests.
 
 To improve scraping success:
-1. Set `INSTAGRAM_SESSION_COOKIES` (preferred) or `INSTAGRAM_SESSION_COOKIE` in your `.env.local`
-2. To get the cookie: log into Instagram in your browser, open DevTools > Application > Cookies > `sessionid`
-3. Copy just the value (not the key)
+1. Set `INSTAGRAM_COOKIE_HEADER` (preferred) or `INSTAGRAM_SESSION_COOKIE` in your `.env.local`
+2. To get the full cookie header: log into Instagram, open DevTools > Network, open any request to `instagram.com`, copy the `cookie` request header
+3. Paste the full header value (not including the word `cookie:`)
+4. If you only use `INSTAGRAM_SESSION_COOKIE`, paste just the `sessionid` value
 
 When multiple cookies are configured, the scanner automatically validates and rotates them, using the first valid one for discovery/scraping.
 

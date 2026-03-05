@@ -79,9 +79,17 @@ function getHeaders(sessionCookie?: string): Record<string, string> {
     Accept: '*/*',
     'Accept-Language': 'en-US,en;q=0.9',
     'X-IG-App-ID': '936619743392459',
+    Referer: `${INSTAGRAM_BASE}/`,
+    'X-Requested-With': 'XMLHttpRequest',
   };
   if (sessionCookie) {
-    headers['Cookie'] = `sessionid=${sessionCookie}`;
+    const raw = sessionCookie.trim().replace(/^cookie:\s*/i, '');
+    // Accept either a plain sessionid value or a full browser cookie header.
+    headers['Cookie'] = raw.includes('=') ? raw : `sessionid=${raw}`;
+    const csrfMatch = headers['Cookie'].match(/(?:^|;\s*)csrftoken=([^;]+)/i);
+    if (csrfMatch?.[1]) {
+      headers['X-CSRFToken'] = csrfMatch[1];
+    }
   }
   return headers;
 }
