@@ -1,8 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getScan, updateScan, createScanItems, getScanItems, updateScanItem } from '@/lib/db';
-import { discoverUsernames, scrapeProfile } from '@/lib/scraper';
+import { discoverUsernames, scrapeProfile, validateSessionCookie } from '@/lib/scraper';
 import { evaluateFilters, computeScore } from '@/lib/scoring';
 import { FilterCriteria } from '@/lib/types';
+
+function parseSessionCookies(): string[] {
+  const raw = process.env.INSTAGRAM_SESSION_COOKIES || process.env.INSTAGRAM_SESSION_COOKIE || '';
+  return [...new Set(raw.split(/[\n,]/).map((v) => v.trim()).filter(Boolean))];
+}
+
+function prioritizeCookie(primary: string, allCookies: string[]): string[] {
+  const unique = [...new Set(allCookies.filter(Boolean))];
+  if (!primary) return unique;
+  return [primary, ...unique.filter((cookie) => cookie !== primary)];
+}
 
 export async function POST(
   _req: NextRequest,
@@ -24,20 +35,60 @@ export async function POST(
     await updateScan(scanId, { status: 'running' });
 
     const filters: FilterCriteria = scan.filters || {};
-    const sessionCookie = process.env.INSTAGRAM_SESSION_COOKIE || '';
     const allowMockData = process.env.ALLOW_MOCK_DATA === 'true';
+    const configuredCookies = parseSessionCookies();
+
+    let validCookie = '';
+    for (const cookie of configuredCookies) {
+      if (await validateSessionCookie(cookie)) {
+        validCookie = cookie;
+        break;
+      }
+    }
+
+    if (!validCookie && !allowMockData) {
+      await updateScan(scanId, {
+        status: 'failed',
+        finished_at: new Date().toISOString(),
+      });
+      return NextResponse.json(
+        {
+          error:
+            'No valid Instagram session cookie found. Update INSTAGRAM_SESSION_COOKIES (or INSTAGRAM_SESSION_COOKIE) in environment variables and redeploy.',
+        },
+        { status: 503 }
+      );
+    }
 
     // ===== PHASE 1: Discover usernames =====
     const hashtags = filters.search_hashtags || [];
     const keywords = filters.search_keywords || [];
     const maxAccounts = filters.max_accounts || 25;
 
-    const { usernames, isMock: usedMockDiscovery } = await discoverUsernames({
-      hashtags,
-      searchKeywords: keywords,
-      maxAccounts,
-      sessionCookie,
-    });
+    const discoveryCookieCandidates = prioritizeCookie(validCookie, configuredCookies);
+    if (discoveryCookieCandidates.length === 0) {
+      discoveryCookieCandidates.push('');
+    }
+
+    let usernames: string[] = [];
+    let usedMockDiscovery = false;
+    let discoveryCookieUsed = '';
+
+    for (const cookie of discoveryCookieCandidates) {
+      const discovery = await discoverUsernames({
+        hashtags,
+        searchKeywords: keywords,
+        maxAccounts,
+        sessionCookie: cookie || undefined,
+      });
+      usernames = discovery.usernames;
+      usedMockDiscovery = discovery.isMock;
+      discoveryCookieUsed = cookie;
+
+      if (!discovery.isMock || allowMockData) {
+        break;
+      }
+    }
 
     if (usedMockDiscovery && !allowMockData) {
       await updateScan(scanId, {
@@ -89,10 +140,32 @@ export async function POST(
       try {
         await updateScanItem(item.id, { status: 'processing' });
 
-        const { profile, error: scrapeError, isMock } = await scrapeProfile(item.username, {
-          sessionCookie,
-          postsToAnalyze: filters.last_x_posts_to_analyze || 12,
-        });
+        const scrapeCookieCandidates = prioritizeCookie(discoveryCookieUsed, configuredCookies);
+        if (scrapeCookieCandidates.length === 0) {
+          scrapeCookieCandidates.push('');
+        }
+
+        let profile = null;
+        let scrapeError: string | null = null;
+        let isMock = false;
+
+        for (const cookie of scrapeCookieCandidates) {
+          const attempt = await scrapeProfile(item.username, {
+            sessionCookie: cookie || undefined,
+            postsToAnalyze: filters.last_x_posts_to_analyze || 12,
+          });
+
+          if (attempt.profile && !attempt.isMock) {
+            profile = attempt.profile;
+            scrapeError = null;
+            isMock = false;
+            break;
+          }
+
+          profile = attempt.profile;
+          scrapeError = attempt.error;
+          isMock = attempt.isMock;
+        }
 
         if (scrapeError || !profile || (isMock && !allowMockData)) {
           await updateScanItem(item.id, {

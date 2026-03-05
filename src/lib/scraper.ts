@@ -95,6 +95,18 @@ export interface DiscoveryOptions {
   sessionCookie?: string;
 }
 
+export async function validateSessionCookie(sessionCookie?: string): Promise<boolean> {
+  if (!sessionCookie) return false;
+  try {
+    const headers = getHeaders(sessionCookie);
+    const url = `${INSTAGRAM_BASE}/api/v1/web/accounts/edit/web_form_data/`;
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // Search Instagram hashtag page and extract unique usernames from recent posts
 async function discoverFromHashtag(
   hashtag: string,
