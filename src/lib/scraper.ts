@@ -173,8 +173,8 @@ async function discoverFromSearch(
 
 function extractInstagramUsernamesFromHtml(html: string): string[] {
   const usernames = new Set<string>();
-  const regex = /https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)\/?/gi;
-  let match: RegExpExecArray | null = regex.exec(html);
+  const directRegex = /https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)\/?/gi;
+  let match: RegExpExecArray | null = directRegex.exec(html);
 
   while (match) {
     const candidate = (match[1] || '').toLowerCase().trim();
@@ -194,15 +194,59 @@ function extractInstagramUsernamesFromHtml(html: string): string[] {
     ) {
       usernames.add(candidate);
     }
-    match = regex.exec(html);
+    match = directRegex.exec(html);
+  }
+
+  // Search engines often wrap URLs in redirect params (e.g. uddg=...).
+  // Decode these links and extract usernames from the decoded target URL.
+  const hrefRegex = /href="([^"]+)"/gi;
+  let hrefMatch: RegExpExecArray | null = hrefRegex.exec(html);
+  while (hrefMatch) {
+    const href = hrefMatch[1] || '';
+    const uddgPart = href.split('uddg=')[1];
+    if (uddgPart) {
+      try {
+        const decoded = decodeURIComponent(uddgPart);
+        const decodedRegex = /https?:\/\/(?:www\.)?instagram\.com\/([A-Za-z0-9._]+)\/?/gi;
+        let decodedMatch: RegExpExecArray | null = decodedRegex.exec(decoded);
+        while (decodedMatch) {
+          const candidate = (decodedMatch[1] || '').toLowerCase().trim();
+          if (candidate && candidate !== 'explore' && candidate !== 'accounts') {
+            usernames.add(candidate);
+          }
+          decodedMatch = decodedRegex.exec(decoded);
+        }
+      } catch {
+        // Ignore malformed encodings.
+      }
+    }
+    hrefMatch = hrefRegex.exec(html);
+  }
+
+  // Also handle URL-encoded direct instagram links embedded in the page.
+  const encodedRegex = /https%3A%2F%2F(?:www\.)?instagram\.com%2F([A-Za-z0-9._%-]+)/gi;
+  let encodedMatch: RegExpExecArray | null = encodedRegex.exec(html);
+  while (encodedMatch) {
+    try {
+      const candidate = decodeURIComponent(encodedMatch[1] || '').toLowerCase().trim();
+      if (candidate && candidate !== 'explore' && candidate !== 'accounts') {
+        usernames.add(candidate);
+      }
+    } catch {
+      // Ignore malformed encodings.
+    }
+    encodedMatch = encodedRegex.exec(html);
   }
 
   return [...usernames];
 }
 
-async function discoverFromWebSearch(term: string): Promise<string[]> {
+async function discoverFromWebSearch(term: string, source: 'duckduckgo' | 'bing'): Promise<string[]> {
   const query = `site:instagram.com "${term}"`;
-  const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  const searchUrl =
+    source === 'duckduckgo'
+      ? `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`
+      : `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
   const headers = {
     'User-Agent':
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -216,7 +260,7 @@ async function discoverFromWebSearch(term: string): Promise<string[]> {
     const html = await res.text();
     return extractInstagramUsernamesFromHtml(html);
   } catch (err) {
-    console.log(`Web discovery failed for "${term}":`, err);
+    console.log(`Web discovery failed for "${term}" (${source}):`, err);
     return [];
   }
 }
@@ -327,8 +371,11 @@ export async function discoverUsernames(options: DiscoveryOptions): Promise<{
     for (const term of webTerms) {
       if (allUsernames.size >= maxAccounts) break;
       await sleep(getRandomDelay(800, 1800));
-      const found = await discoverFromWebSearch(term);
-      found.forEach((u) => allUsernames.add(u));
+      const foundDuck = await discoverFromWebSearch(term, 'duckduckgo');
+      foundDuck.forEach((u) => allUsernames.add(u));
+      if (allUsernames.size >= maxAccounts) break;
+      const foundBing = await discoverFromWebSearch(term, 'bing');
+      foundBing.forEach((u) => allUsernames.add(u));
     }
   }
 
