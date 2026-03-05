@@ -28,15 +28,14 @@ const BELGIUM_BASE_KEYWORDS = [
   'belgië',
   'belgique',
   'belgien',
-  'be',
 ];
 
 const COUNTRY_KEYWORDS: Record<string, string[]> = {
   belgium: BELGIUM_BASE_KEYWORDS,
-  netherlands: ['netherlands', 'nederland', 'holland', 'nl'],
-  france: ['france', 'français', 'francaise', 'francais', 'fr'],
-  germany: ['germany', 'deutschland', 'de'],
-  luxembourg: ['luxembourg', 'letzebuerg', 'lu'],
+  netherlands: ['netherlands', 'nederland', 'holland'],
+  france: ['france', 'français', 'francaise', 'francais'],
+  germany: ['germany', 'deutschland'],
+  luxembourg: ['luxembourg', 'letzebuerg'],
 };
 
 const BELGIUM_PROVINCE_KEYWORDS: Record<string, string[]> = {

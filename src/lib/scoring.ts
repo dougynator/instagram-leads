@@ -3,6 +3,23 @@ import { getLocationKeywordsFromFilters } from './location';
 
 // ==================== Filter Evaluation ====================
 
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function containsKeyword(text: string, keyword: string): boolean {
+  const normalized = keyword.trim().toLowerCase();
+  if (!normalized) return false;
+
+  // Use word boundaries for short tokens to avoid false positives (e.g. "be" in "based").
+  if (normalized.length <= 3) {
+    const regex = new RegExp(`(^|[^a-z0-9])${escapeRegExp(normalized)}([^a-z0-9]|$)`, 'i');
+    return regex.test(text);
+  }
+
+  return text.includes(normalized);
+}
+
 export function evaluateFilters(
   profile: ScrapedProfile,
   filters: FilterCriteria
@@ -156,7 +173,7 @@ export function evaluateFilters(
 
   // Location keywords
   if (locationKeywords.length) {
-    const matched = locationKeywords.filter((kw) => locationText.includes(kw));
+    const matched = locationKeywords.filter((kw) => containsKeyword(locationText, kw));
     const passed = matched.length > 0;
     const criteriaLabel = filters.location_country ? 'location_country' : 'location_keywords';
     addReason(

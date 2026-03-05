@@ -20,7 +20,7 @@ const TAG_COLORS: Record<string, string> = {
 };
 
 export default function ResultsTable({ items, onUpdateItem }: ResultsTableProps) {
-  const [matchedOnly, setMatchedOnly] = useState(false);
+  const [matchedOnly, setMatchedOnly] = useState(true);
   const [sortField, setSortField] = useState<SortField>('score');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [selectedItem, setSelectedItem] = useState<ScanItem | null>(null);
@@ -90,7 +90,7 @@ export default function ResultsTable({ items, onUpdateItem }: ResultsTableProps)
     }
   };
 
-  const SortIcon = ({ field }: { field: SortField }) => (
+  const renderSortIcon = (field: SortField) => (
     <span className="ml-1 text-xs">
       {sortField === field ? (sortDir === 'asc' ? '↑' : '↓') : '↕'}
     </span>
@@ -139,27 +139,27 @@ export default function ResultsTable({ items, onUpdateItem }: ResultsTableProps)
               <tr className="border-b border-border bg-secondary/50">
                 <th className="text-left px-4 py-3 font-medium text-muted">
                   <button onClick={() => toggleSort('username')} className="flex items-center hover:text-foreground">
-                    Username <SortIcon field="username" />
+                    Username {renderSortIcon('username')}
                   </button>
                 </th>
                 <th className="text-right px-4 py-3 font-medium text-muted">
                   <button onClick={() => toggleSort('follower_count')} className="flex items-center justify-end hover:text-foreground">
-                    Followers <SortIcon field="follower_count" />
+                    Followers {renderSortIcon('follower_count')}
                   </button>
                 </th>
                 <th className="text-right px-4 py-3 font-medium text-muted">
                   <button onClick={() => toggleSort('engagement_rate')} className="flex items-center justify-end hover:text-foreground">
-                    Engagement <SortIcon field="engagement_rate" />
+                    Engagement {renderSortIcon('engagement_rate')}
                   </button>
                 </th>
                 <th className="text-right px-4 py-3 font-medium text-muted">
                   <button onClick={() => toggleSort('score')} className="flex items-center justify-end hover:text-foreground">
-                    Score <SortIcon field="score" />
+                    Score {renderSortIcon('score')}
                   </button>
                 </th>
                 <th className="text-center px-4 py-3 font-medium text-muted">
                   <button onClick={() => toggleSort('matched')} className="flex items-center justify-center hover:text-foreground">
-                    Match <SortIcon field="matched" />
+                    Match {renderSortIcon('matched')}
                   </button>
                 </th>
                 <th className="text-left px-4 py-3 font-medium text-muted">Contact</th>
